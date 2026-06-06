@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agentdeck</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #ddd; font-family: -apple-system, system-ui, sans-serif; }
+    #bar { display: flex; align-items: center; height: 32px; background: #2d2d2d; border-bottom: 1px solid #1a1a1a; padding: 0 4px; gap: 2px; }
+    .tab { padding: 4px 12px; background: #1e1e1e; color: #aaa; border: 1px solid #1a1a1a; border-bottom: none; cursor: pointer; user-select: none; }
+    .tab.active { background: #1e1e1e; color: #eee; }
+    .tab .x { margin-left: 8px; color: #777; }
+    .tab .x:hover { color: #eee; }
+    #new { padding: 4px 10px; background: transparent; color: #aaa; border: 1px solid transparent; cursor: pointer; }
+    #new:hover { color: #eee; }
+    #status { margin-left: auto; padding: 4px 10px; font-size: 12px; color: #888; }
+    #term { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; padding: 4px; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <span id="tabs"></span>
+    <button id="new" title="New tab">+</button>
+    <span id="status">connecting...</span>
+  </div>
+  <div id="term"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script>
+  (function() {
+    let nextId = 1;
+    let activeId = null;
+    const terminals = new Map();
+
+    const termEl = document.getElementById("term");
+    const tabsEl = document.getElementById("tabs");
+    const newBtn = document.getElementById("new");
+    const statusEl = document.getElementById("status");
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function makeTerminal(id) {
+      const term = new Terminal({
+        cursorBlink: true,
+        fontFamily: 'Consolas, "Courier New", monospace',
+        fontSize: 14,
+        theme: { background: '#1e1e1e' },
+      });
+      const fit = new FitAddon.FitAddon();
+      term.loadAddon(fit);
+      term.open(termEl);
+      fit.fit();
+      term.onData(data => {
+        const t = terminals.get(id);
+        if (t && t.ws && t.ws.readyState === WebSocket.OPEN) {
+          t.ws.send(new TextEncoder().encode(data));
+        }
+      });
+      term.focus();
+
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${location.host}/ws/${id}`);
+      ws.binaryType = "arraybuffer";
+      ws.onopen = () => setStatus("connected");
+      ws.onclose = () => setStatus("disconnected");
+      ws.onerror = () => setStatus("error");
+      ws.onmessage = (e) => {
+        const t = terminals.get(id);
+        if (t) t.term.write(new Uint8Array(e.data));
+      };
+
+      return { term, fit, ws };
+    }
+
+    function renderTabs() {
+      tabsEl.innerHTML = "";
+      for (const [id, t] of terminals) {
+        const el = document.createElement("span");
+        el.className = "tab" + (id === activeId ? " active" : "");
+        el.textContent = `tab ${id}`;
+        const x = document.createElement("span");
+        x.className = "x";
+        x.textContent = "x";
+        x.onclick = (e) => { e.stopPropagation(); closeTab(id); };
+        el.appendChild(x);
+        el.onclick = () => activate(id);
+        tabsEl.appendChild(el);
+      }
+    }
+
+    function activate(id) {
+      activeId = id;
+      for (const [tId, t] of terminals) {
+        if (tId === id) {
+          t.term.attachCustomKeyEventHandler(() => true);
+          t.term.focus();
+        } else {
+          t.term.attachCustomKeyEventHandler(() => false);
+        }
+      }
+      renderTabs();
+    }
+
+    function closeTab(id) {
+      const t = terminals.get(id);
+      if (!t) return;
+      try { t.ws.close(); } catch (e) {}
+      t.term.dispose();
+      terminals.delete(id);
+      if (activeId === id) {
+        const remaining = [...terminals.keys()];
+        activeId = remaining[0] || null;
+        if (activeId) activate(activeId);
+        else termEl.innerHTML = "";
+      }
+      renderTabs();
+    }
+
+    function newTab() {
+      const id = nextId++;
+      terminals.set(id, makeTerminal(id));
+      activate(id);
+    }
+
+    newBtn.onclick = newTab;
+    window.addEventListener("resize", () => {
+      const t = terminals.get(activeId);
+      if (t) try { t.fit.fit(); } catch (e) {}
+    });
+
+    newTab();
+  })();
+  </script>
+</body>
+</html>

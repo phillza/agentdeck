@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentdeck"
+version = "0.1.0"
+description = "A minimal multi-terminal desktop workspace served in your browser. Spawns shells, pipes them to xterm.js tabs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Phillip", email = "phillza1337@hotmail.com" }]
+keywords = ["terminal", "xterm", "websocket", "cli", "pty", "workspace"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Terminals",
+]
+dependencies = [
+    "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+agentdeck = "agentdeck.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/phillza/agentdeck"
+Repository = "https://github.com/phillza/agentdeck"
+Issues = "https://github.com/phillza/agentdeck/issues"
+
+[tool.setuptools.packages.find]
+include = ["agentdeck*"]
+
+[tool.setuptools.package-data]
+agentdeck = ["static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
