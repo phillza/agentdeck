@@ -32,9 +32,16 @@ agentdeck
 
 # Or open the UI in your default browser
 agentdeck --open
+
+# Or use the watchdog-friendly launcher (writes PID file, drops
+# clean_shutdown marker on graceful exit, picks a free port 8765-8864)
+python run.py
 ```
 
 Then visit http://127.0.0.1:8765 (or whatever port it picked).
+
+> Use `python run.py` when the watchdog is going to manage the process.
+> Use the `agentdeck` console script for a one-shot interactive run.
 
 ## How it works
 
@@ -60,7 +67,10 @@ I wanted a tiny, readable reference for "browser-based terminal multiplexer." Mo
 For long-running installations (e.g. dev machines, kiosk setups), agentdeck ships a small watchdog helper that restarts the server if the listening port goes dead:
 
 ```bash
-# One-shot health check (uses ~8700-8800 port range)
+# Start the server (writes pid:port:token to %LOCALAPPDATA%\AgentDeck\server.pid)
+python run.py
+
+# In a separate shell, one-shot health check (uses ~8700-8800 port range)
 python scripts/agentdeck_watchdog.py --check
 
 # Windows-only: install a Task Scheduler entry that runs --check every minute
@@ -68,7 +78,9 @@ python scripts/agentdeck_watchdog.py --install-task
 .\scripts\install_watchdog_task.bat
 ```
 
-The watchdog distinguishes "agentdeck was intentionally closed" from "agentdeck crashed" via a `clean_shutdown.txt` marker in `%LOCALAPPDATA%\AgentDeck\`. It only restarts when no marker is present and no port is reachable.
+The watchdog distinguishes "agentdeck was intentionally closed" from "agentdeck crashed" via a `clean_shutdown.txt` marker in `%LOCALAPPDATA%\AgentDeck\`. The launcher (`run.py`) writes that marker via an `atexit` handler on a clean Python exit (Ctrl+C, `sys.exit`, normal shutdown), and removes the marker on the next start. If the watchdog finds a stale PID file or a dead port with **no** marker, it respawns `run.py` detached.
+
+For debugging, `python run.py --no-marker` skips the `clean_shutdown` write so the watchdog will try to restart on the next check — useful for testing the auto-recovery loop.
 
 To smoke-test rendering from inside a running agentdeck tab:
 
@@ -116,12 +128,15 @@ agentdeck/
   server.py       # aiohttp app: serves /, handles /ws/{tab_id}
   static/
     index.html    # xterm.js UI with tab bar
+run.py            # Watchdog-aware launcher (PID file + clean_shutdown marker)
 scripts/
   agentdeck_watchdog.py     # auto-restart helper (Windows-friendly)
   terminal_torture.py       # smoke-test escape sequences
   install_watchdog_task.bat # Windows Task Scheduler installer
 tests/
-  test_server.py  # smoke tests
+  test_server.py   # smoke tests for make_app + find_free_port
+  test_watchdog.py # watchdog helpers
+  test_run.py      # run.py launcher lifecycle
 ```
 
 Total: ~250 lines of Python + ~100 lines of HTML. Read it end-to-end in 10 minutes.
