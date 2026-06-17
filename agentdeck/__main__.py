@@ -11,10 +11,19 @@ from .server import make_app
 
 
 def _find_free_port(start: int, end: int) -> int:
+    """Return the first port in ``[start, end]`` we can claim with ``bind()``.
+
+    Using ``bind()`` (rather than ``connect_ex()``) is deliberate: it asks the
+    OS whether the port is free, regardless of TIME_WAIT state or a half-closed
+    socket. ``connect_ex`` can be flaky in those edge cases.
+    """
     for port in range(start, end + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(("127.0.0.1", port)) != 0:
-                return port
+            try:
+                s.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
     raise RuntimeError(f"No free port found in {start}-{end}")
 
 

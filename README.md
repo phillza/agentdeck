@@ -4,6 +4,8 @@
 
 A tiny, no-frills multiplexer: open a tab, get a shell. Each tab is its own OS process. Bytes go in and out over WebSockets; the UI is xterm.js. No auth, no session save, no swarms, no fancy features. Just terminals.
 
+![agentdeck tabs: terminal 1, terminal 2, plus, connected](https://placehold.co/640x320/0d1117/c9d1d9?text=agentdeck+screenshot+coming+soon)
+
 ## What it looks like
 
 ```
@@ -45,13 +47,37 @@ Then visit http://127.0.0.1:8765 (or whatever port it picked).
 ```
 
 - **One HTTP route** serves a single `index.html` page
-- **One WebSocket route per tab** upgrades to a PTY-backed shell
+- **One WebSocket route per tab** upgrades to a shell
 - Each tab spawns a real OS process; bytes flow both ways
 - Disconnect = process terminated
 
 ## Why I built this
 
 I wanted a tiny, readable reference for "browser-based terminal multiplexer." Most projects in this space are thousands of lines with elaborate session management, persistence, and complex UIs. This is the opposite: ~150 lines of Python and ~100 lines of HTML, easy to read, easy to fork.
+
+## Production tips
+
+For long-running installations (e.g. dev machines, kiosk setups), agentdeck ships a small watchdog helper that restarts the server if the listening port goes dead:
+
+```bash
+# One-shot health check (uses ~8700-8800 port range)
+python scripts/agentdeck_watchdog.py --check
+
+# Windows-only: install a Task Scheduler entry that runs --check every minute
+python scripts/agentdeck_watchdog.py --install-task
+.\scripts\install_watchdog_task.bat
+```
+
+The watchdog distinguishes "agentdeck was intentionally closed" from "agentdeck crashed" via a `clean_shutdown.txt` marker in `%LOCALAPPDATA%\AgentDeck\`. It only restarts when no marker is present and no port is reachable.
+
+To smoke-test rendering from inside a running agentdeck tab:
+
+```bash
+python scripts/terminal_torture.py            # 120 ms between chunks
+python scripts/terminal_torture.py --no-delay # all chunks back-to-back
+```
+
+That script emits a fixed sequence of colour, truecolour, wide-Unicode, line-wrap, progress-bar (`\r`), alternate-screen (`\x1b[?1049h`), and mouse-mode (`\x1b[?1000h`) escape sequences. If something looks wrong in your terminal, this is the easiest way to reproduce it.
 
 ## Known limitations
 
@@ -79,6 +105,8 @@ pytest
 ruff check .
 ```
 
+A GitHub Actions workflow under `.github/workflows/ci.yml` runs the test matrix on Python 3.10-3.12 for every push and PR.
+
 ## Architecture
 
 ```
@@ -88,6 +116,10 @@ agentdeck/
   server.py       # aiohttp app: serves /, handles /ws/{tab_id}
   static/
     index.html    # xterm.js UI with tab bar
+scripts/
+  agentdeck_watchdog.py     # auto-restart helper (Windows-friendly)
+  terminal_torture.py       # smoke-test escape sequences
+  install_watchdog_task.bat # Windows Task Scheduler installer
 tests/
   test_server.py  # smoke tests
 ```

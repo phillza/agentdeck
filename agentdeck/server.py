@@ -13,6 +13,7 @@ The point is a tiny, readable example of a browser-based terminal multiplexer.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -95,10 +96,8 @@ async def handle_terminal(request: web.Request) -> web.WebSocketResponse:
             proc.terminate()
             await asyncio.wait_for(proc.wait(), timeout=2.0)
         except (ProcessLookupError, asyncio.TimeoutError):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 proc.kill()
-            except ProcessLookupError:
-                pass
 
     return ws
 
